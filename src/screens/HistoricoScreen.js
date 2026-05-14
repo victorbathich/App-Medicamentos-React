@@ -3,8 +3,13 @@ import {
   View, Text, SectionList, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db, firebaseConfigurado } from '../config/firebase';
+import { firebaseConfigurado } from '../config/firebase';
+import {
+  buscarMedicamentos,
+  buscarRegistrosPeriodo,
+  getMedicamentosEmCache,
+  getRegistrosPeriodoEmCache,
+} from '../services/firestoreData';
 import { colors, shadows } from '../theme';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -39,53 +44,77 @@ function formatarData(dataStr) {
   return `${DIAS_SEMANA[date.getDay()]}, ${d} de ${MESES[m - 1]}`;
 }
 
+function montarSecoes(dias, registros, medicamentos) {
+  const medMap = {};
+  medicamentos.forEach(medicamento => { medMap[medicamento.id] = medicamento; });
+
+  const agrupado = {};
+  dias.forEach(dia => { agrupado[dia] = []; });
+  registros.forEach(reg => {
+    if (agrupado[reg.data] !== undefined) {
+      agrupado[reg.data].push(reg);
+    }
+  });
+
+  return dias
+    .filter(dia => agrupado[dia].length > 0)
+    .reverse()
+    .map(dia => ({
+      title: dia,
+      data: agrupado[dia].sort((a, b) => a.horario.localeCompare(b.horario)),
+      medMap,
+    }));
+}
+
 export default function HistoricoScreen() {
-  const [secoes, setSecoes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [secoes, setSecoes] = useState(() => {
+    const dias = getUltimos7Dias();
+    const dataInicio = dias[0];
+    const dataFim = dias[dias.length - 1];
+    const registrosCache = getRegistrosPeriodoEmCache(dataInicio, dataFim);
+    const medicamentosCache = getMedicamentosEmCache();
 
-  const carregarHistorico = async () => {
+    return registrosCache && medicamentosCache
+      ? montarSecoes(dias, registrosCache, medicamentosCache)
+      : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const dias = getUltimos7Dias();
+    const dataInicio = dias[0];
+    const dataFim = dias[dias.length - 1];
+    return !(getRegistrosPeriodoEmCache(dataInicio, dataFim) && getMedicamentosEmCache());
+  });
+
+  const carregarHistorico = useCallback(async () => {
     if (!firebaseConfigurado) { setLoading(false); return; }
-    setLoading(true);
-    try {
-      const dias = getUltimos7Dias();
-      const dataInicio = dias[0];
+    const dias = getUltimos7Dias();
+    const dataInicio = dias[0];
+    const dataFim = dias[dias.length - 1];
+    const registrosCache = getRegistrosPeriodoEmCache(dataInicio, dataFim);
+    const medicamentosCache = getMedicamentosEmCache();
 
-      const [regSnap, medSnap] = await Promise.all([
-        getDocs(query(collection(db, 'registros'), where('data', '>=', dataInicio))),
-        getDocs(collection(db, 'medicamentos')),
+    if (registrosCache && medicamentosCache) {
+      setSecoes(montarSecoes(dias, registrosCache, medicamentosCache));
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const [registros, medicamentos] = await Promise.all([
+        buscarRegistrosPeriodo(dataInicio, dataFim),
+        buscarMedicamentos(),
       ]);
 
-      const medMap = {};
-      medSnap.docs.forEach(d => { medMap[d.id] = d.data(); });
-
-      const registros = regSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const agrupado = {};
-      dias.forEach(dia => { agrupado[dia] = []; });
-      registros.forEach(reg => {
-        if (agrupado[reg.data] !== undefined) {
-          agrupado[reg.data].push(reg);
-        }
-      });
-
-      const resultado = dias
-        .filter(dia => agrupado[dia].length > 0)
-        .reverse()
-        .map(dia => ({
-          title: dia,
-          data: agrupado[dia].sort((a, b) => a.horario.localeCompare(b.horario)),
-          medMap,
-        }));
-
-      setSecoes(resultado);
+      setSecoes(montarSecoes(dias, registros, medicamentos));
     } catch (e) {
       Alert.alert('Erro', 'Não foi possível carregar o histórico.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useFocusEffect(useCallback(() => { carregarHistorico(); }, []));
+  useFocusEffect(useCallback(() => { carregarHistorico(); }, [carregarHistorico]));
 
   const renderItem = ({ item, section }) => {
     const med = section.medMap[item.medicamentoId];

@@ -4,8 +4,7 @@ import {
   StyleSheet, Alert, ActivityIndicator, Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { atualizarMedicamento, criarMedicamento } from '../services/firestoreData';
 import { colors, shadows } from '../theme';
 
 const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -102,10 +101,10 @@ export default function FormularioScreen({ navigation, route }) {
       };
 
       if (editando) {
-        await updateDoc(doc(db, 'medicamentos', editando.id), dados);
+        await atualizarMedicamento(editando.id, dados);
         Alert.alert('Salvo!', 'Medicamento atualizado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
       } else {
-        await addDoc(collection(db, 'medicamentos'), { ...dados, criadoEm: serverTimestamp() });
+        await criarMedicamento(dados);
         if (Platform.OS === 'web') {
           window.alert('Medicamento adicionado com sucesso.');
           irParaHoje();

@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getApps, initializeApp } from 'firebase/app';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyCl3ZyyV2ek8qVWlxDHMynqeEXKbgwyAmQ',
@@ -13,5 +13,15 @@ const firebaseConfig = {
 
 export const firebaseConfigurado = true;
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+
+let firestore;
+try {
+  firestore = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+} catch (e) {
+  firestore = getFirestore(app);
+}
+
+export const db = firestore;

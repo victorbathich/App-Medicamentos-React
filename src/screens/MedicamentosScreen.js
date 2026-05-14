@@ -4,32 +4,39 @@ import {
   StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { db, firebaseConfigurado } from '../config/firebase';
+import { firebaseConfigurado } from '../config/firebase';
+import {
+  buscarMedicamentos as buscarMedicamentosFirestore,
+  getMedicamentosEmCache,
+} from '../services/firestoreData';
 import { colors, shadows } from '../theme';
 
 export default function MedicamentosScreen({ navigation }) {
-  const [medicamentos, setMedicamentos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [medicamentos, setMedicamentos] = useState(() => getMedicamentosEmCache() || []);
+  const [loading, setLoading] = useState(() => getMedicamentosEmCache() === null);
 
-  const buscarMedicamentos = async () => {
+  const buscarMedicamentos = useCallback(async () => {
     if (!firebaseConfigurado) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cache = getMedicamentosEmCache();
+    if (cache) {
+      setMedicamentos(cache);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
-      const q = query(collection(db, 'medicamentos'), orderBy('criadoEm', 'desc'));
-      const snapshot = await getDocs(q);
-      setMedicamentos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setMedicamentos(await buscarMedicamentosFirestore());
     } catch (e) {
       Alert.alert('Erro', 'Não foi possível carregar os medicamentos.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useFocusEffect(useCallback(() => { buscarMedicamentos(); }, []));
+  useFocusEffect(useCallback(() => { buscarMedicamentos(); }, [buscarMedicamentos]));
 
   const renderItem = ({ item }) => (
     <TouchableOpacity

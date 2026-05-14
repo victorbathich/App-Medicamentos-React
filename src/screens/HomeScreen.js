@@ -4,8 +4,15 @@ import {
   StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, getDocs, addDoc, updateDoc, doc, query, where } from 'firebase/firestore';
-import { db, firebaseConfigurado } from '../config/firebase';
+import { firebaseConfigurado } from '../config/firebase';
+import {
+  atualizarRegistroTomado,
+  buscarMedicamentos,
+  buscarRegistrosPorData,
+  criarRegistro,
+  getMedicamentosEmCache,
+  getRegistrosPorDataEmCache,
+} from '../services/firestoreData';
 import { colors, shadows } from '../theme';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -93,6 +100,24 @@ function doseEstaAtrasada(dose, rotina) {
   return getMinutosAgora() > minutosDose;
 }
 
+function montarRotinaEDoses(medicamentos, registros) {
+  const rotinaAtual = calcularDataRotina(medicamentos);
+  const lista = [];
+
+  for (const med of medicamentos) {
+    if (!medicamentoAtivoNoDia(med, rotinaAtual.diaSemana)) continue;
+
+    const horariosDoDia = med.horarios?.length > 0 ? med.horarios : [''];
+    for (const horario of horariosDoDia) {
+      const reg = registros.find(r => r.medicamentoId === med.id && r.horario === horario) || null;
+      lista.push({ medicamento: med, horario, registro: reg });
+    }
+  }
+
+  lista.sort((a, b) => a.horario.localeCompare(b.horario));
+  return { rotinaAtual, lista };
+}
+
 export default function HomeScreen() {
   const [doses, setDoses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -104,56 +129,74 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const carregarDados = async () => {
+  const aplicarDados = useCallback((medicamentos, registros) => {
+    const { rotinaAtual, lista } = montarRotinaEDoses(medicamentos, registros);
+    setRotina(rotinaAtual);
+    setDoses(lista);
+  }, []);
+
+  const carregarDados = useCallback(async () => {
     if (!firebaseConfigurado) { setLoading(false); return; }
-    setLoading(true);
+    const medicamentosCache = getMedicamentosEmCache();
+    if (medicamentosCache) {
+      const rotinaCache = calcularDataRotina(medicamentosCache);
+      aplicarDados(medicamentosCache, getRegistrosPorDataEmCache(rotinaCache.dataKey) || []);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
-      const medSnap = await getDocs(collection(db, 'medicamentos'));
-      const medicamentos = medSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const medicamentos = await buscarMedicamentos();
       const rotinaAtual = calcularDataRotina(medicamentos);
 
-      const regSnap = await getDocs(
-        query(collection(db, 'registros'), where('data', '==', rotinaAtual.dataKey))
-      );
-      const registros = regSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const lista = [];
-      for (const med of medicamentos) {
-        if (!medicamentoAtivoNoDia(med, rotinaAtual.diaSemana)) continue;
-
-        const horariosDoDia = med.horarios?.length > 0 ? med.horarios : [''];
-        for (const horario of horariosDoDia) {
-          const reg = registros.find(r => r.medicamentoId === med.id && r.horario === horario) || null;
-          lista.push({ medicamento: med, horario, registro: reg });
-        }
-      }
-
-      lista.sort((a, b) => a.horario.localeCompare(b.horario));
-      setRotina(rotinaAtual);
-      setDoses(lista);
+      const registros = await buscarRegistrosPorData(rotinaAtual.dataKey);
+      aplicarDados(medicamentos, registros);
     } catch (e) {
       Alert.alert('Erro', 'Não foi possível carregar os dados.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [aplicarDados]);
 
-  useFocusEffect(useCallback(() => { carregarDados(); }, []));
+  useFocusEffect(useCallback(() => { carregarDados(); }, [carregarDados]));
 
   const marcarTomado = async (dose) => {
+    const mesmaDose = item =>
+      item.medicamento.id === dose.medicamento.id && item.horario === dose.horario;
+    const registroAnterior = dose.registro;
+    const novoTomado = !registroAnterior?.tomado;
+    const registroPendente = registroAnterior
+      ? { ...registroAnterior, tomado: novoTomado }
+      : {
+          id: `pendente-${Date.now()}`,
+          medicamentoId: dose.medicamento.id,
+          data: rotina.dataKey,
+          horario: dose.horario,
+          tomado: true,
+        };
+
+    setDoses(prev => prev.map(item =>
+      mesmaDose(item) ? { ...item, registro: registroPendente } : item
+    ));
+
     try {
-      if (dose.registro) {
-        await updateDoc(doc(db, 'registros', dose.registro.id), { tomado: !dose.registro.tomado });
+      if (registroAnterior) {
+        await atualizarRegistroTomado(registroAnterior, novoTomado);
       } else {
-        await addDoc(collection(db, 'registros'), {
+        const registroCriado = await criarRegistro({
           medicamentoId: dose.medicamento.id,
           data: rotina.dataKey,
           horario: dose.horario,
           tomado: true,
         });
+        setDoses(prev => prev.map(item =>
+          mesmaDose(item) ? { ...item, registro: registroCriado } : item
+        ));
       }
-      carregarDados();
     } catch (e) {
+      setDoses(prev => prev.map(item =>
+        mesmaDose(item) ? { ...item, registro: registroAnterior } : item
+      ));
       Alert.alert('Erro', 'Não foi possível registrar.');
     }
   };

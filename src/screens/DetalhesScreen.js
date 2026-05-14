@@ -3,8 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, Alert, Platform, ActivityIndicator,
 } from 'react-native';
-import { doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { excluirMedicamento } from '../services/firestoreData';
 import { colors, shadows } from '../theme';
 
 export default function DetalhesScreen({ navigation, route }) {
@@ -19,7 +18,7 @@ export default function DetalhesScreen({ navigation, route }) {
 
     setExcluindo(true);
     try {
-      await deleteDoc(doc(db, 'medicamentos', medicamento.id));
+      await excluirMedicamento(medicamento.id);
       Alert.alert('Excluído!', 'Medicamento removido com sucesso.', [
         { text: 'OK', onPress: () => navigation.navigate('Lista') },
       ]);
