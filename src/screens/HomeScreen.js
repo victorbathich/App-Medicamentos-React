@@ -269,9 +269,16 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <>
       <View style={styles.hero}>
-        <Text style={styles.heroDate}>{rotina.label}</Text>
-        <Text style={styles.heroTitle}>{tomados}/{total} doses</Text>
-        <Text style={styles.heroTime}>Horário: {horaBrasilia}</Text>
+        <View style={styles.heroTop}>
+          <View style={styles.heroClockBlock}>
+            <Text style={styles.heroDate}>{rotina.label}</Text>
+            <Text style={styles.heroClockTime}>{horaBrasilia}</Text>
+          </View>
+          <View style={styles.heroDoseBlock}>
+            <Text style={styles.heroDoseCount}>{tomados}/{total}</Text>
+            <Text style={styles.heroDoseLabel}>doses</Text>
+          </View>
+        </View>
         {rotina.resetada && (
           <Text style={styles.resetHint}>Rotina renovada após a última dose do dia anterior.</Text>
         )}
@@ -355,9 +362,18 @@ const styles = StyleSheet.create({
     paddingTop: 44,
     paddingBottom: 24,
   },
-  heroDate: { color: '#AAA8B8', fontSize: 14, fontWeight: '700' },
-  heroTitle: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', marginTop: 4 },
-  heroTime: { color: '#D6D3E4', fontSize: 13, fontWeight: '800', marginTop: 8 },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  heroClockBlock: { flex: 1, minWidth: 0 },
+  heroDate: { color: '#D6D3E4', fontSize: 18, fontWeight: '800' },
+  heroClockTime: { color: '#FFFFFF', fontSize: 48, fontWeight: '900', marginTop: 6 },
+  heroDoseBlock: { alignItems: 'flex-end', paddingTop: 6, minWidth: 92 },
+  heroDoseCount: { color: '#FFFFFF', fontSize: 34, fontWeight: '900' },
+  heroDoseLabel: { color: '#AAA8B8', fontSize: 15, fontWeight: '800', marginTop: 2 },
   resetHint: { color: '#8FE8CD', fontSize: 12, fontWeight: '800', marginTop: 8 },
   progressBars: { flexDirection: 'row', gap: 7, marginTop: 18 },
   progressBar: { flex: 1, height: 6, borderRadius: 999, backgroundColor: '#4E4C62' },
