@@ -9,6 +9,7 @@ import {
   buscarRegistrosPeriodo,
   getMedicamentosEmCache,
   getRegistrosPeriodoEmCache,
+  limparRegistrosSemMedicamento,
 } from '../services/firestoreData';
 import { colors, shadows } from '../theme';
 import { formatarErroFirebase } from '../utils/firebaseError';
@@ -52,7 +53,7 @@ function montarSecoes(dias, registros, medicamentos) {
   const agrupado = {};
   dias.forEach(dia => { agrupado[dia] = []; });
   registros.forEach(reg => {
-    if (agrupado[reg.data] !== undefined) {
+    if (medMap[reg.medicamentoId] && agrupado[reg.data] !== undefined) {
       agrupado[reg.data].push(reg);
     }
   });
@@ -108,6 +109,7 @@ export default function HistoricoScreen() {
       ]);
 
       setSecoes(montarSecoes(dias, registros, medicamentos));
+      limparRegistrosSemMedicamento(registros, medicamentos).catch(() => null);
     } catch (e) {
       Alert.alert('Erro', formatarErroFirebase(e, 'Nao foi possivel carregar o historico.'));
       return;
@@ -120,8 +122,10 @@ export default function HistoricoScreen() {
 
   const renderItem = ({ item, section }) => {
     const med = section.medMap[item.medicamentoId];
-    const nomeMed = med?.nome ?? 'Medicamento removido';
-    const doseMed = med?.dose ?? '';
+    if (!med) return null;
+
+    const nomeMed = med.nome;
+    const doseMed = med.dose ?? '';
     return (
       <View style={styles.item}>
         <View style={[styles.itemIcone, item.tomado ? styles.iconeTomado : styles.iconePendente]}>

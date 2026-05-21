@@ -108,8 +108,17 @@ export default function MedicamentosScreen({ navigation }) {
           </View>
         }
       />
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('Formulario')}>
-        <Text style={styles.fabText}>+</Text>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('Formulario')}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityLabel="Adicionar medicamento"
+      >
+        <View style={styles.fabPlus} pointerEvents="none">
+          <View style={styles.fabPlusHorizontal} />
+          <View style={styles.fabPlusVertical} />
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -190,5 +199,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.float,
   },
-  fabText: { fontSize: 34, color: '#fff', lineHeight: 40, fontWeight: '600' },
+  fabPlus: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabPlusHorizontal: {
+    position: 'absolute',
+    width: 22,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#fff',
+  },
+  fabPlusVertical: {
+    position: 'absolute',
+    width: 3,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: '#fff',
+  },
 });

@@ -2,6 +2,7 @@ import { firebaseConfig } from '../config/firebase';
 
 const TEMPO_CACHE_MS = 60000;
 const TEMPO_FIREBASE_MS = 30000;
+const LIMITE_WRITES_COMMIT = 500;
 const BASE_URL = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
 const API_KEY = firebaseConfig.apiKey;
 
@@ -28,6 +29,18 @@ function periodoKey(dataInicio, dataFim) {
 
 function documentoId(nomeCompleto) {
   return nomeCompleto?.split('/').pop();
+}
+
+function caminhoDocumento(colecao, id) {
+  return `projects/${firebaseConfig.projectId}/databases/(default)/documents/${colecao}/${id}`;
+}
+
+function dividirEmLotes(lista, tamanho) {
+  const lotes = [];
+  for (let i = 0; i < lista.length; i += tamanho) {
+    lotes.push(lista.slice(i, i + tamanho));
+  }
+  return lotes;
 }
 
 function normalizarCodigo(status) {
@@ -154,6 +167,20 @@ async function listarColecao(nome) {
   return (resposta.documents || []).map(decodificarDocumento);
 }
 
+async function commitWrites(writes, acao) {
+  if (writes.length === 0) return;
+
+  for (const lote of dividirEmLotes(writes, LIMITE_WRITES_COMMIT)) {
+    await comTempoLimite(
+      requisitarFirestore(':commit', {
+        method: 'POST',
+        body: JSON.stringify({ writes: lote }),
+      }),
+      acao
+    );
+  }
+}
+
 function salvarRegistroEmCache(registro) {
   if (!registro?.data) return;
 
@@ -181,6 +208,40 @@ function salvarRegistroEmCache(registro) {
       lista.push(registro);
     }
     cache.registrosPeriodo.set(key, criarEntrada(lista));
+  });
+}
+
+function removerRegistrosDoMedicamentoEmCache(medicamentoId) {
+  cache.registrosPorData.forEach((entrada, dataKey) => {
+    cache.registrosPorData.set(
+      dataKey,
+      criarEntrada(entrada.dados.filter(registro => registro.medicamentoId !== medicamentoId))
+    );
+  });
+
+  cache.registrosPeriodo.forEach((entrada, key) => {
+    cache.registrosPeriodo.set(
+      key,
+      criarEntrada(entrada.dados.filter(registro => registro.medicamentoId !== medicamentoId))
+    );
+  });
+}
+
+function removerRegistrosPorIdsEmCache(registroIds) {
+  if (registroIds.size === 0) return;
+
+  cache.registrosPorData.forEach((entrada, dataKey) => {
+    cache.registrosPorData.set(
+      dataKey,
+      criarEntrada(entrada.dados.filter(registro => !registroIds.has(registro.id)))
+    );
+  });
+
+  cache.registrosPeriodo.forEach((entrada, key) => {
+    cache.registrosPeriodo.set(
+      key,
+      criarEntrada(entrada.dados.filter(registro => !registroIds.has(registro.id)))
+    );
   });
 }
 
@@ -308,6 +369,23 @@ export async function atualizarRegistroTomado(registro, tomado) {
   return atualizado;
 }
 
+export async function limparRegistrosSemMedicamento(registros, medicamentos) {
+  const medicamentoIds = new Set(medicamentos.map(medicamento => medicamento.id).filter(Boolean));
+  const registrosOrfaos = registros.filter(registro =>
+    registro.id && registro.medicamentoId && !medicamentoIds.has(registro.medicamentoId)
+  );
+
+  if (registrosOrfaos.length === 0) return 0;
+
+  await commitWrites(
+    registrosOrfaos.map(registro => ({ delete: caminhoDocumento('registros', registro.id) })),
+    'limpar historico'
+  );
+
+  removerRegistrosPorIdsEmCache(new Set(registrosOrfaos.map(registro => registro.id)));
+  return registrosOrfaos.length;
+}
+
 export async function criarMedicamento(dados) {
   const agora = new Date().toISOString();
   const resposta = await comTempoLimite(
@@ -353,14 +431,24 @@ export async function atualizarMedicamento(id, dados) {
 }
 
 export async function excluirMedicamento(id) {
-  await comTempoLimite(
-    requisitarFirestore(`/medicamentos/${id}`, { method: 'DELETE' }),
-    'excluir medicamento'
+  const registros = await comTempoLimite(
+    listarColecao('registros'),
+    'carregar historico do medicamento'
   );
+  const registrosDoMedicamento = registros.filter(registro => registro.medicamentoId === id && registro.id);
+  const writes = [
+    ...registrosDoMedicamento.map(registro => ({
+      delete: caminhoDocumento('registros', registro.id),
+    })),
+    { delete: caminhoDocumento('medicamentos', id) },
+  ];
+
+  await commitWrites(writes, 'excluir medicamento e historico');
 
   if (cache.medicamentos) {
     cache.medicamentos = criarEntrada(
       cache.medicamentos.dados.filter(medicamento => medicamento.id !== id)
     );
   }
+  removerRegistrosDoMedicamentoEmCache(id);
 }
