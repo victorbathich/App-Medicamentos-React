@@ -28,6 +28,7 @@ export default function FormularioScreen({ navigation, route }) {
   const [mostrarPicker, setMostrarPicker] = useState(false);
   const [horarioSelecionado, setHorarioSelecionado] = useState(new Date());
   const [horarioManual, setHorarioManual] = useState(formatarHora(new Date()));
+  const [salvoComSucesso, setSalvoComSucesso] = useState(false);
 
   useEffect(() => {
     if (editando) {
@@ -103,7 +104,7 @@ export default function FormularioScreen({ navigation, route }) {
 
       if (editando) {
         await atualizarMedicamento(editando.id, dados);
-        Alert.alert('Salvo!', 'Medicamento atualizado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        setSalvoComSucesso(true);
       } else {
         await criarMedicamento(dados);
         if (Platform.OS === 'web') {
@@ -124,6 +125,7 @@ export default function FormularioScreen({ navigation, route }) {
   };
 
   return (
+    <View style={styles.container}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -273,6 +275,27 @@ export default function FormularioScreen({ navigation, route }) {
         }
       </TouchableOpacity>
     </ScrollView>
+    {salvoComSucesso && (
+      <View style={styles.successOverlay}>
+        <View style={styles.successCard}>
+          <View style={styles.successIcon}>
+            <Text style={styles.successIconText}>✓</Text>
+          </View>
+          <Text style={styles.successTitle}>Salvo com sucesso!</Text>
+          <Text style={styles.successText}>As alteracoes do medicamento foram atualizadas.</Text>
+          <TouchableOpacity
+            style={styles.successButton}
+            onPress={() => {
+              setSalvoComSucesso(false);
+              navigation.goBack();
+            }}
+          >
+            <Text style={styles.successButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )}
+    </View>
   );
 }
 
@@ -385,4 +408,53 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.7 },
   btnSalvarText: { fontSize: 16, fontWeight: '900', color: '#fff' },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.46)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+    zIndex: 20,
+    elevation: 20,
+  },
+  successCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    ...shadows.float,
+  },
+  successIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: colors.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  successIconText: { color: colors.success, fontSize: 28, fontWeight: '900' },
+  successTitle: { fontSize: 21, fontWeight: '900', color: colors.text, textAlign: 'center' },
+  successText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  successButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    width: '100%',
+  },
+  successButtonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
 });

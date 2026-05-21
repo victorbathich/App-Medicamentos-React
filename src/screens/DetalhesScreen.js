@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, Platform, ActivityIndicator,
+  StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { excluirMedicamento } from '../services/firestoreData';
 import { colors, shadows } from '../theme';
@@ -10,6 +10,7 @@ import { formatarErroFirebase } from '../utils/firebaseError';
 export default function DetalhesScreen({ navigation, route }) {
   const { medicamento } = route.params;
   const [excluindo, setExcluindo] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
   const confirmarExclusao = async () => {
     if (!medicamento?.id) {
@@ -18,6 +19,7 @@ export default function DetalhesScreen({ navigation, route }) {
     }
 
     setExcluindo(true);
+    setConfirmandoExclusao(false);
     try {
       await excluirMedicamento(medicamento.id);
       Alert.alert('Excluído!', 'Medicamento removido com sucesso.', [
@@ -32,23 +34,11 @@ export default function DetalhesScreen({ navigation, route }) {
   };
 
   const excluir = () => {
-    if (Platform.OS === 'web') {
-      const confirmado = window.confirm(`Tem certeza que deseja excluir "${medicamento.nome}"?`);
-      if (confirmado) confirmarExclusao();
-      return;
-    }
-
-    Alert.alert(
-      'Excluir medicamento',
-      `Tem certeza que deseja excluir "${medicamento.nome}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Excluir', style: 'destructive', onPress: confirmarExclusao },
-      ]
-    );
+    setConfirmandoExclusao(true);
   };
 
   return (
+    <View style={styles.container}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <View style={styles.initialCircle}>
@@ -112,6 +102,40 @@ export default function DetalhesScreen({ navigation, route }) {
         }
       </TouchableOpacity>
     </ScrollView>
+
+    {confirmandoExclusao && (
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalIcon}>
+            <Text style={styles.modalIconText}>!</Text>
+          </View>
+          <Text style={styles.modalTitle}>Excluir medicamento?</Text>
+          <Text style={styles.modalText}>
+            Essa ação remove "{medicamento.nome}" da rotina e apaga os registros dele no histórico.
+          </Text>
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setConfirmandoExclusao(false)}
+              disabled={excluindo}
+            >
+              <Text style={styles.modalCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalDeleteButton}
+              onPress={confirmarExclusao}
+              disabled={excluindo}
+            >
+              {excluindo
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.modalDeleteText}>Excluir</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    )}
+    </View>
   );
 }
 
@@ -178,4 +202,62 @@ const styles = StyleSheet.create({
   },
   btnDesabilitado: { opacity: 0.65 },
   btnExcluirText: { fontSize: 16, fontWeight: '900', color: colors.danger },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+    zIndex: 20,
+    elevation: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    ...shadows.float,
+  },
+  modalIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: colors.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  modalIconText: { color: colors.danger, fontSize: 28, fontWeight: '900' },
+  modalTitle: { fontSize: 21, fontWeight: '900', color: colors.text, textAlign: 'center' },
+  modalText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 20, width: '100%' },
+  modalCancelButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  modalDeleteButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalDeleteText: { color: '#fff', fontSize: 15, fontWeight: '900' },
 });
