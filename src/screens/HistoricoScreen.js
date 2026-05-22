@@ -74,6 +74,16 @@ function getStatusRegistro(registro) {
   return futuroHoje ? 'pendente' : 'naoTomado';
 }
 
+function registroPertenceAoMedicamento(registro, medicamento) {
+  const horarios = medicamento.horarios || [];
+
+  if (horarios.length === 0) {
+    return !registro.horario;
+  }
+
+  return horarios.includes(registro.horario);
+}
+
 function montarSecoes(dias, registros, medicamentos) {
   const medMap = {};
   medicamentos.forEach(medicamento => { medMap[medicamento.id] = medicamento; });
@@ -81,7 +91,12 @@ function montarSecoes(dias, registros, medicamentos) {
   const agrupado = {};
   dias.forEach(dia => { agrupado[dia] = []; });
   registros.forEach(reg => {
-    if (medMap[reg.medicamentoId] && agrupado[reg.data] !== undefined) {
+    const medicamento = medMap[reg.medicamentoId];
+    if (
+      medicamento &&
+      agrupado[reg.data] !== undefined &&
+      registroPertenceAoMedicamento(reg, medicamento)
+    ) {
       agrupado[reg.data].push(reg);
     }
   });
