@@ -10,10 +10,55 @@ import { formatarErroFirebase } from '../utils/firebaseError';
 
 const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
+const UNIDADES_DOSE = ['mg', 'ml'];
+
+function separarDose(valor = '') {
+  const doseTexto = String(valor).trim();
+  const match = doseTexto.match(/^(.+?)\s*(mg|ml)$/i);
+
+  if (!match) {
+    return { quantidade: doseTexto, unidade: 'mg' };
+  }
+
+  return {
+    quantidade: match[1].trim(),
+    unidade: match[2].toLowerCase(),
+  };
+}
+
 function formatarHora(date) {
   const h = String(date.getHours()).padStart(2, '0');
   const m = String(date.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
+}
+
+function ajustarHoraTexto(valor, tipo, passo) {
+  const [horaTexto = '00', minutoTexto = '00'] = valor.split(':');
+  let hora = Number.parseInt(horaTexto, 10);
+  let minuto = Number.parseInt(minutoTexto, 10);
+
+  if (Number.isNaN(hora)) hora = 0;
+  if (Number.isNaN(minuto)) minuto = 0;
+
+  if (tipo === 'hora') {
+    hora = (hora + passo + 24) % 24;
+  } else {
+    minuto = (minuto + passo + 60) % 60;
+  }
+
+  return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+}
+
+function aplicarParteHorario(valor, tipo, novoValor) {
+  const numeros = novoValor.replace(/\D/g, '').slice(0, 2);
+  const limite = tipo === 'hora' ? 23 : 59;
+  const numero = Math.min(Number.parseInt(numeros || '0', 10), limite);
+  const [horaTexto = '00', minutoTexto = '00'] = valor.split(':');
+  const parte = String(numero).padStart(2, '0');
+
+  return tipo === 'hora'
+    ? `${parte}:${minutoTexto.padStart(2, '0').slice(0, 2)}`
+    : `${horaTexto.padStart(2, '0').slice(0, 2)}:${parte}`;
 }
 
 export default function FormularioScreen({ navigation, route }) {
@@ -21,6 +66,7 @@ export default function FormularioScreen({ navigation, route }) {
 
   const [nome, setNome] = useState('');
   const [dose, setDose] = useState('');
+  const [unidadeDose, setUnidadeDose] = useState('mg');
   const [observacoes, setObservacoes] = useState('');
   const [horarios, setHorarios] = useState([]);
   const [diasSelecionados, setDiasSelecionados] = useState([]);
@@ -29,11 +75,14 @@ export default function FormularioScreen({ navigation, route }) {
   const [horarioSelecionado, setHorarioSelecionado] = useState(new Date());
   const [horarioManual, setHorarioManual] = useState(formatarHora(new Date()));
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
+  const [sucessoCadastro, setSucessoCadastro] = useState(false);
 
   useEffect(() => {
     if (editando) {
+      const doseAtual = separarDose(editando.dose);
       setNome(editando.nome || '');
-      setDose(editando.dose || '');
+      setDose(doseAtual.quantidade);
+      setUnidadeDose(doseAtual.unidade);
       setObservacoes(editando.observacoes || '');
       setHorarios(editando.horarios || []);
       setDiasSelecionados(editando.diasDaSemana || []);
@@ -41,13 +90,18 @@ export default function FormularioScreen({ navigation, route }) {
     navigation.setOptions({ title: editando ? 'Editar medicamento' : 'Novo medicamento' });
   }, []);
 
-  const irParaHoje = () => {
-    const parent = navigation.getParent();
-    if (parent) {
-      parent.navigate('Home');
-    } else {
-      navigation.navigate('Home');
-    }
+  const resetarFormulario = () => {
+    const agora = new Date();
+
+    setNome('');
+    setDose('');
+    setUnidadeDose('mg');
+    setObservacoes('');
+    setHorarios([]);
+    setDiasSelecionados([]);
+    setMostrarPicker(false);
+    setHorarioSelecionado(agora);
+    setHorarioManual(formatarHora(agora));
   };
 
   const adicionarHorarioValor = (valor) => {
@@ -83,6 +137,14 @@ export default function FormularioScreen({ navigation, route }) {
     adicionarHorarioValor(hora);
   };
 
+  const ajustarHorarioManual = (tipo, passo) => {
+    setHorarioManual(atual => ajustarHoraTexto(atual, tipo, passo));
+  };
+
+  const editarParteHorario = (tipo, valor) => {
+    setHorarioManual(atual => aplicarParteHorario(atual, tipo, valor));
+  };
+
   const toggleDia = (dia) =>
     setDiasSelecionados(prev =>
       prev.includes(dia) ? prev.filter(d => d !== dia) : [...prev, dia]
@@ -96,7 +158,7 @@ export default function FormularioScreen({ navigation, route }) {
     try {
       const dados = {
         nome: nome.trim(),
-        dose: dose.trim(),
+        dose: `${dose.trim()}${unidadeDose}`,
         horarios,
         diasDaSemana: diasSelecionados,
         observacoes: observacoes.trim(),
@@ -104,17 +166,12 @@ export default function FormularioScreen({ navigation, route }) {
 
       if (editando) {
         await atualizarMedicamento(editando.id, dados);
+        setSucessoCadastro(false);
         setSalvoComSucesso(true);
       } else {
         await criarMedicamento(dados);
-        if (Platform.OS === 'web') {
-          window.alert('Medicamento adicionado com sucesso.');
-          irParaHoje();
-        } else {
-          Alert.alert('Cadastrado!', 'Medicamento adicionado com sucesso.', [
-            { text: 'OK', onPress: irParaHoje },
-          ]);
-        }
+        setSucessoCadastro(true);
+        setSalvoComSucesso(true);
       }
     } catch (e) {
       Alert.alert('Erro', formatarErroFirebase(e, 'Nao foi possivel salvar.'));
@@ -150,13 +207,35 @@ export default function FormularioScreen({ navigation, route }) {
         />
 
         <Text style={styles.label}>Dose *</Text>
-        <TextInput
-          style={styles.input}
-          value={dose}
-          onChangeText={setDose}
-          placeholder="Ex: 50mg"
-          placeholderTextColor="#98A2B3"
-        />
+        <View style={styles.doseRow}>
+          <TextInput
+            style={[styles.input, styles.doseInput]}
+            value={dose}
+            onChangeText={setDose}
+            placeholder="Ex: 50"
+            placeholderTextColor="#98A2B3"
+            keyboardType="numeric"
+          />
+          <View style={styles.unitSelector}>
+            {UNIDADES_DOSE.map(unidade => {
+              const ativo = unidadeDose === unidade;
+              return (
+                <TouchableOpacity
+                  key={unidade}
+                  style={[styles.unitButton, ativo && styles.unitButtonActive]}
+                  onPress={() => setUnidadeDose(unidade)}
+                  activeOpacity={0.86}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ativo }}
+                >
+                  <Text style={[styles.unitButtonText, ativo && styles.unitButtonTextActive]}>
+                    {unidade}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -165,27 +244,59 @@ export default function FormularioScreen({ navigation, route }) {
           <Text style={styles.counterText}>{horarios.length} selecionado(s)</Text>
         </View>
 
-        <TouchableOpacity style={styles.btnHorario} onPress={() => setMostrarPicker(true)}>
-          <Text style={styles.btnHorarioText}>
-            {Platform.OS === 'web' ? 'Digitar horário' : 'Selecionar horário'}
-          </Text>
-        </TouchableOpacity>
+        {Platform.OS === 'web' && (
+          <View style={styles.timeSelector}>
+            <View style={styles.timePickerRow}>
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeLabel}>Hora</Text>
+                <TouchableOpacity style={styles.timeAdjustButton} onPress={() => ajustarHorarioManual('hora', 1)}>
+                  <Text style={styles.timeAdjustText}>+</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.timeValueInput}
+                  value={horarioManual.split(':')[0]}
+                  onChangeText={valor => editarParteHorario('hora', valor)}
+                  keyboardType="numeric"
+                  maxLength={2}
+                  selectTextOnFocus
+                  accessibilityLabel="Hora"
+                />
+                <TouchableOpacity style={styles.timeAdjustButton} onPress={() => ajustarHorarioManual('hora', -1)}>
+                  <Text style={styles.timeAdjustText}>-</Text>
+                </TouchableOpacity>
+              </View>
 
-        {mostrarPicker && Platform.OS === 'web' && (
-          <View style={styles.manualTimeWrap}>
-            <TextInput
-              style={[styles.input, styles.manualTimeInput]}
-              value={horarioManual}
-              onChangeText={setHorarioManual}
-              placeholder="08:00"
-              placeholderTextColor="#98A2B3"
-              keyboardType="numeric"
-              maxLength={5}
-            />
+              <Text style={styles.timeSeparator}>:</Text>
+
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeLabel}>Min</Text>
+                <TouchableOpacity style={styles.timeAdjustButton} onPress={() => ajustarHorarioManual('minuto', 1)}>
+                  <Text style={styles.timeAdjustText}>+</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.timeValueInput}
+                  value={horarioManual.split(':')[1]}
+                  onChangeText={valor => editarParteHorario('minuto', valor)}
+                  keyboardType="numeric"
+                  maxLength={2}
+                  selectTextOnFocus
+                  accessibilityLabel="Minuto"
+                />
+                <TouchableOpacity style={styles.timeAdjustButton} onPress={() => ajustarHorarioManual('minuto', -1)}>
+                  <Text style={styles.timeAdjustText}>-</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             <TouchableOpacity onPress={adicionarHorario} style={styles.btnConfirmarHorario}>
-              <Text style={styles.btnConfirmarText}>Adicionar horário</Text>
+              <Text style={styles.btnConfirmarText}>Adicionar {horarioManual}</Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity style={styles.btnHorario} onPress={() => setMostrarPicker(true)}>
+            <Text style={styles.btnHorarioText}>Escolher outro horário</Text>
+          </TouchableOpacity>
         )}
 
         {mostrarPicker && Platform.OS !== 'web' && (
@@ -208,12 +319,6 @@ export default function FormularioScreen({ navigation, route }) {
               </View>
             )}
           </View>
-        )}
-
-        {!mostrarPicker && Platform.OS === 'web' && (
-          <TouchableOpacity style={styles.btnAddHorario} onPress={adicionarHorario}>
-            <Text style={styles.btnAddHorarioText}>Adicionar {horarioManual}</Text>
-          </TouchableOpacity>
         )}
 
         {!mostrarPicker && Platform.OS === 'android' && (
@@ -281,13 +386,31 @@ export default function FormularioScreen({ navigation, route }) {
           <View style={styles.successIcon}>
             <Text style={styles.successIconText}>✓</Text>
           </View>
-          <Text style={styles.successTitle}>Salvo com sucesso!</Text>
-          <Text style={styles.successText}>As alteracoes do medicamento foram atualizadas.</Text>
+          <Text style={styles.successTitle}>
+            {sucessoCadastro ? 'Medicamento cadastrado!' : 'Salvo com sucesso!'}
+          </Text>
+          <Text style={styles.successText}>
+            {sucessoCadastro
+              ? 'O medicamento foi adicionado a rotina.'
+              : 'As alteracoes do medicamento foram atualizadas.'}
+          </Text>
           <TouchableOpacity
             style={styles.successButton}
             onPress={() => {
               setSalvoComSucesso(false);
-              navigation.goBack();
+              if (sucessoCadastro) {
+                setSucessoCadastro(false);
+                resetarFormulario();
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Lista' }],
+                });
+              } else {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Lista' }],
+                });
+              }
             }}
           >
             <Text style={styles.successButtonText}>OK</Text>
@@ -335,7 +458,76 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  doseRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  doseInput: { flex: 1 },
+  unitSelector: {
+    flexDirection: 'row',
+    backgroundColor: colors.primarySoft,
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  unitButton: {
+    minWidth: 46,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  unitButtonActive: { backgroundColor: colors.primary },
+  unitButtonText: { fontSize: 14, color: colors.primaryDark, fontWeight: '900' },
+  unitButtonTextActive: { color: '#fff' },
   textArea: { height: 92, textAlignVertical: 'top', marginTop: 12 },
+  timeSelector: {
+    marginTop: 14,
+    backgroundColor: '#FAFBFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  timeColumn: {
+    flex: 1,
+    maxWidth: 116,
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeLabel: { fontSize: 12, color: colors.muted, fontWeight: '900', textTransform: 'uppercase' },
+  timeAdjustButton: {
+    width: '100%',
+    minHeight: 42,
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeAdjustText: { color: colors.primaryDark, fontSize: 24, fontWeight: '900', lineHeight: 26 },
+  timeValueInput: {
+    width: '100%',
+    minHeight: 42,
+    color: colors.text,
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 38,
+    textAlign: 'center',
+    borderRadius: 12,
+    paddingVertical: 0,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  timeSeparator: { color: colors.muted, fontSize: 30, fontWeight: '900', paddingTop: 26 },
   btnHorario: {
     backgroundColor: colors.primary,
     borderRadius: 14,
@@ -345,27 +537,14 @@ const styles = StyleSheet.create({
   },
   btnHorarioText: { fontSize: 15, color: '#fff', fontWeight: '900' },
   pickerWrap: { marginTop: 10 },
-  manualTimeWrap: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    width: '100%',
-    maxWidth: '100%',
-    marginTop: 10,
-  },
-  manualTimeInput: {
-    width: '100%',
-    maxWidth: '100%',
-    textAlign: 'center',
-    fontWeight: '900',
-  },
   btnConfirmarHorario: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
-    padding: 13,
+    borderRadius: 14,
+    padding: 14,
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
+    marginTop: 12,
     width: '100%',
-    maxWidth: '100%',
   },
   btnAddHorario: {
     backgroundColor: colors.primarySoft,

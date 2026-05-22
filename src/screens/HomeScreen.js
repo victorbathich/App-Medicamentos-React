@@ -19,19 +19,12 @@ import { formatarErroFirebase } from '../utils/firebaseError';
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const MINUTOS_RESET_APOS_ULTIMA_DOSE = 30;
 
 function toDateKey(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
 }
 
 function getLabelData(date) {
@@ -66,28 +59,14 @@ function medicamentoAtivoNoDia(med, diaSemana) {
   return !(med.diasDaSemana?.length > 0 && !med.diasDaSemana.includes(diaSemana));
 }
 
-function calcularDataRotina(medicamentos) {
+function calcularDataRotina() {
   const hoje = new Date();
-  const diaHoje = getDiaSemana(hoje);
-  const horariosHoje = medicamentos
-    .filter(med => medicamentoAtivoNoDia(med, diaHoje))
-    .flatMap(med => med.horarios || [])
-    .map(horarioParaMinutos)
-    .filter(minutos => minutos !== null);
-
-  const ultimoHorarioHoje = horariosHoje.length > 0 ? Math.max(...horariosHoje) : null;
-  const deveVirarRotina =
-    ultimoHorarioHoje !== null &&
-    getMinutosAgora() >= ultimoHorarioHoje + MINUTOS_RESET_APOS_ULTIMA_DOSE;
-
-  const data = deveVirarRotina ? addDays(hoje, 1) : hoje;
 
   return {
-    data,
-    dataKey: toDateKey(data),
-    diaSemana: getDiaSemana(data),
-    label: getLabelData(data),
-    resetada: deveVirarRotina,
+    data: hoje,
+    dataKey: toDateKey(hoje),
+    diaSemana: getDiaSemana(hoje),
+    label: getLabelData(hoje),
   };
 }
 
@@ -102,7 +81,7 @@ function doseEstaAtrasada(dose, rotina) {
 }
 
 function montarRotinaEDoses(medicamentos, registros) {
-  const rotinaAtual = calcularDataRotina(medicamentos);
+  const rotinaAtual = calcularDataRotina();
   const lista = [];
 
   for (const med of medicamentos) {
@@ -123,7 +102,7 @@ export default function HomeScreen() {
   const [doses, setDoses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [horaBrasilia, setHoraBrasilia] = useState(getHoraBrasilia());
-  const [rotina, setRotina] = useState(() => calcularDataRotina([]));
+  const [rotina, setRotina] = useState(() => calcularDataRotina());
 
   useEffect(() => {
     const timer = setInterval(() => setHoraBrasilia(getHoraBrasilia()), 30000);
@@ -140,7 +119,7 @@ export default function HomeScreen() {
     if (!firebaseConfigurado) { setLoading(false); return; }
     const medicamentosCache = getMedicamentosEmCache();
     if (medicamentosCache) {
-      const rotinaCache = calcularDataRotina(medicamentosCache);
+      const rotinaCache = calcularDataRotina();
       aplicarDados(medicamentosCache, getRegistrosPorDataEmCache(rotinaCache.dataKey) || []);
       setLoading(false);
     } else {
@@ -148,7 +127,7 @@ export default function HomeScreen() {
     }
     try {
       const medicamentos = await buscarMedicamentos();
-      const rotinaAtual = calcularDataRotina(medicamentos);
+      const rotinaAtual = calcularDataRotina();
 
       const registros = await buscarRegistrosPorData(rotinaAtual.dataKey);
       aplicarDados(medicamentos, registros);
@@ -279,9 +258,6 @@ export default function HomeScreen() {
             <Text style={styles.heroDoseLabel}>doses</Text>
           </View>
         </View>
-        {rotina.resetada && (
-          <Text style={styles.resetHint}>Rotina renovada após a última dose do dia anterior.</Text>
-        )}
         {total > 0 && renderProgressBars()}
       </View>
 
@@ -374,7 +350,6 @@ const styles = StyleSheet.create({
   heroDoseBlock: { alignItems: 'flex-end', paddingTop: 6, minWidth: 92 },
   heroDoseCount: { color: '#FFFFFF', fontSize: 34, fontWeight: '900' },
   heroDoseLabel: { color: '#AAA8B8', fontSize: 15, fontWeight: '800', marginTop: 2 },
-  resetHint: { color: '#8FE8CD', fontSize: 12, fontWeight: '800', marginTop: 8 },
   progressBars: { flexDirection: 'row', gap: 7, marginTop: 18 },
   progressBar: { flex: 1, height: 6, borderRadius: 999, backgroundColor: '#4E4C62' },
   progressBarDone: { backgroundColor: '#6EE7C8' },

@@ -46,6 +46,34 @@ function formatarData(dataStr) {
   return `${DIAS_SEMANA[date.getDay()]}, ${d} de ${MESES[m - 1]}`;
 }
 
+function getHojeKey() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+}
+
+function horarioParaMinutos(horario) {
+  if (!horario || !/^\d{2}:\d{2}$/.test(horario)) return null;
+  const [hora, minuto] = horario.split(':').map(Number);
+  return hora * 60 + minuto;
+}
+
+function getMinutosAgora() {
+  const agora = new Date();
+  return agora.getHours() * 60 + agora.getMinutes();
+}
+
+function getStatusRegistro(registro) {
+  if (registro.tomado) return 'tomado';
+
+  const minutosRegistro = horarioParaMinutos(registro.horario);
+  const futuroHoje =
+    registro.data === getHojeKey() &&
+    minutosRegistro !== null &&
+    minutosRegistro > getMinutosAgora();
+
+  return futuroHoje ? 'pendente' : 'naoTomado';
+}
+
 function montarSecoes(dias, registros, medicamentos) {
   const medMap = {};
   medicamentos.forEach(medicamento => { medMap[medicamento.id] = medicamento; });
@@ -126,11 +154,20 @@ export default function HistoricoScreen() {
 
     const nomeMed = med.nome;
     const doseMed = med.dose ?? '';
+    const status = getStatusRegistro(item);
+    const tomado = status === 'tomado';
+    const pendente = status === 'pendente';
     return (
       <View style={styles.item}>
-        <View style={[styles.itemIcone, item.tomado ? styles.iconeTomado : styles.iconePendente]}>
-          <Text style={[styles.iconeText, item.tomado ? styles.iconeTextTomado : styles.iconeTextPendente]}>
-            {item.tomado ? '✓' : '!'}
+        <View style={[
+          styles.itemIcone,
+          tomado ? styles.iconeTomado : pendente ? styles.iconeAguardando : styles.iconePendente,
+        ]}>
+          <Text style={[
+            styles.iconeText,
+            tomado ? styles.iconeTextTomado : pendente ? styles.iconeTextAguardando : styles.iconeTextPendente,
+          ]}>
+            {tomado ? '✓' : pendente ? '...' : '!'}
           </Text>
         </View>
         <View style={styles.itemInfo}>
@@ -138,9 +175,15 @@ export default function HistoricoScreen() {
           {!!doseMed && <Text style={styles.itemDose}>{doseMed}</Text>}
           {!!item.horario && <Text style={styles.itemHorario}>{item.horario}</Text>}
         </View>
-        <View style={[styles.badge, item.tomado ? styles.badgeTomado : styles.badgePendente]}>
-          <Text style={[styles.badgeText, item.tomado ? styles.badgeTextTomado : styles.badgeTextPendente]}>
-            {item.tomado ? 'Tomado' : 'Não tomado'}
+        <View style={[
+          styles.badge,
+          tomado ? styles.badgeTomado : pendente ? styles.badgeAguardando : styles.badgePendente,
+        ]}>
+          <Text style={[
+            styles.badgeText,
+            tomado ? styles.badgeTextTomado : pendente ? styles.badgeTextAguardando : styles.badgeTextPendente,
+          ]}>
+            {tomado ? 'Tomado' : pendente ? 'Pendente' : 'Não tomado'}
           </Text>
         </View>
       </View>
@@ -247,9 +290,11 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   iconeTomado: { backgroundColor: colors.successSoft },
+  iconeAguardando: { backgroundColor: colors.primarySoft },
   iconePendente: { backgroundColor: colors.dangerSoft },
   iconeText: { fontSize: 18, fontWeight: '900' },
   iconeTextTomado: { color: colors.success },
+  iconeTextAguardando: { color: colors.primaryDark, fontSize: 14 },
   iconeTextPendente: { color: colors.danger },
   itemInfo: { flex: 1 },
   itemNome: { fontSize: 16, fontWeight: '800', color: colors.text },
@@ -257,9 +302,11 @@ const styles = StyleSheet.create({
   itemHorario: { fontSize: 13, color: colors.primary, marginTop: 4, fontWeight: '800' },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   badgeTomado: { backgroundColor: colors.successSoft },
+  badgeAguardando: { backgroundColor: colors.primarySoft },
   badgePendente: { backgroundColor: colors.dangerSoft },
   badgeText: { fontSize: 12, fontWeight: '900' },
   badgeTextTomado: { color: colors.success },
+  badgeTextAguardando: { color: colors.primaryDark },
   badgeTextPendente: { color: colors.danger },
   emptyCard: {
     flex: 1,

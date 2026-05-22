@@ -22,9 +22,11 @@ export default function DetalhesScreen({ navigation, route }) {
     setConfirmandoExclusao(false);
     try {
       await excluirMedicamento(medicamento.id);
-      Alert.alert('Excluído!', 'Medicamento removido com sucesso.', [
-        { text: 'OK', onPress: () => navigation.navigate('Lista') },
-      ]);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Lista' }],
+      });
+      Alert.alert('Excluído!', 'Medicamento removido com sucesso.');
     } catch (e) {
       Alert.alert('Erro', formatarErroFirebase(e, 'Nao foi possivel excluir o medicamento.'));
       return;

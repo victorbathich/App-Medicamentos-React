@@ -83,6 +83,15 @@ export default function MedicamentosScreen({ navigation }) {
         <Text style={styles.kicker}>Cadastro</Text>
         <Text style={styles.title}>Medicamentos</Text>
         <Text style={styles.subtitle}>{medicamentos.length} item(ns) na rotina</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('Formulario')}
+          activeOpacity={0.86}
+          accessibilityRole="button"
+          accessibilityLabel="Adicionar medicamento"
+        >
+          <Text style={styles.addButtonText}>Adicionar medicamento</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -100,26 +109,13 @@ export default function MedicamentosScreen({ navigation }) {
               </>
             ) : (
               <>
-                <Text style={styles.emptyIcon}>+</Text>
                 <Text style={styles.emptyTitle}>Nenhum medicamento cadastrado</Text>
-                <Text style={styles.emptyHint}>Use o botão azul para criar a primeira rotina.</Text>
+                <Text style={styles.emptyHint}>Adicione o primeiro medicamento para criar a rotina.</Text>
               </>
             )}
           </View>
         }
       />
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate('Formulario')}
-        activeOpacity={0.86}
-        accessibilityRole="button"
-        accessibilityLabel="Adicionar medicamento"
-      >
-        <View style={styles.fabPlus} pointerEvents="none">
-          <View style={styles.fabPlusHorizontal} />
-          <View style={styles.fabPlusVertical} />
-        </View>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -127,11 +123,21 @@ export default function MedicamentosScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  headerBlock: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8 },
+  headerBlock: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12 },
   kicker: { fontSize: 12, color: colors.primary, fontWeight: '900', textTransform: 'uppercase' },
   title: { fontSize: 26, fontWeight: '900', color: colors.text, marginTop: 2 },
   subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, fontWeight: '600' },
-  listContent: { paddingBottom: 96 },
+  addButton: {
+    minHeight: 52,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    ...shadows.float,
+  },
+  addButtonText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  listContent: { paddingBottom: 28 },
   emptyList: { flex: 1, padding: 16 },
   card: {
     backgroundColor: colors.surface,
@@ -187,36 +193,4 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '900', color: colors.text, textAlign: 'center' },
   emptyHint: { fontSize: 14, color: colors.muted, marginTop: 8, textAlign: 'center', lineHeight: 20 },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 22,
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.float,
-  },
-  fabPlus: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabPlusHorizontal: {
-    position: 'absolute',
-    width: 22,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-  },
-  fabPlusVertical: {
-    position: 'absolute',
-    width: 3,
-    height: 22,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-  },
 });
