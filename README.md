@@ -10,6 +10,7 @@ Professor: Julio Cartier
 - Victor Pacheco da Silva Bathich
 - Marcelo Alexandre Vitorino Raimundo
 - Luiz Felipe de Matos do Nascimento Santos
+- Gustavo Santana Soares do Nascimento
 ---
 
 ## Problema Social
